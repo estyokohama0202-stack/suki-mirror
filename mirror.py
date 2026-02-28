@@ -16,6 +16,8 @@ while True:
         
         print("requesting...", flush=True)
         r = requests.get(URL, headers=headers, timeout=10)
+        
+        print("final url:", r.url, flush=True)
         print("got response", flush=True)
         
         soup = BeautifulSoup(r.text, "html.parser")
