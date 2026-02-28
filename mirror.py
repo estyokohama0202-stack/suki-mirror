@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import time
 import os
 
+print("STARTED", flush=True)
+
 WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
 
