@@ -23,7 +23,7 @@ while True:
                 sent.add(text)
 
         print("checked...")
-        time.sleep(300)  # 5分
+        time.sleep(30)  # 5分
 
     except Exception as e:
         print("error:", e)
