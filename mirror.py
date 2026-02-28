@@ -10,7 +10,8 @@ sent = set()
 
 while True:
     try:
-        r = requests.get(URL)
+        headers = {"User-Agent": "Mozilla/5.0"}
+　　　  r = requests.get(URL, headers=headers)
         soup = BeautifulSoup(r.text, "html.parser")
 
         comments = soup.select(".comment")
