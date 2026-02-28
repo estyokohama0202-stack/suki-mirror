@@ -21,7 +21,8 @@ while True:
         soup = BeautifulSoup(r.text, "html.parser")
 
         comments = soup.select(".comment")
-
+        print("comment count:", len(comments), flush=True)
+        
         for c in comments:
             text = c.get_text(strip=True)
 
