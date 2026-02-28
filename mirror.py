@@ -39,4 +39,4 @@ while True:
     except Exception as e:
         print("error:", e)
 
-    time.sleep(60)
+    time.sleep(30)
