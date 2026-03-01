@@ -22,8 +22,6 @@ options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
 options.add_argument("--window-size=1920,1080")
-
-# Render用（Chromium指定）
 options.binary_location = "/usr/bin/chromium"
 
 service = Service("/usr/bin/chromedriver")
@@ -34,17 +32,17 @@ while True:
         print("opening vote page...", flush=True)
         driver.get(VOTE_URL)
 
-        # 投票ボタンが出るまで待機
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.TAG_NAME, "button"))
         )
 
-        print("clicking vote button...", flush=True)
+        print("searching vote button...", flush=True)
 
-        # 「好き」ボタンを取得（classが違う場合はログください）
         buttons = driver.find_elements(By.TAG_NAME, "button")
+
         for b in buttons:
             if "好き" in b.text:
+                print("clicking like button", flush=True)
                 b.click()
                 break
 
@@ -53,7 +51,6 @@ while True:
         print("opening result page...", flush=True)
         driver.get(RESULT_URL)
 
-        # コメント表示待ち
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "comment-container"))
         )
