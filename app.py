@@ -167,9 +167,12 @@ def check_comments(videos):
                 "content": f"🎬 **{title}**\n\n🔗 {video_url}\n\n👤 {author}\n💬 {text}"
             }
 
-            requests.post(DISCORD_WEBHOOK, json=payload)
+            print("Sending to Discord...", flush=True)
 
-            print("Sent new comment:", published, flush=True)
+            response = requests.post(DISCORD_WEBHOOK, json=payload)
+
+            print("Discord status:", response.status_code, flush=True)
+            print("Discord response:", response.text, flush=True)
 
             if not newest_time or published > newest_time:
                 newest_time = published
