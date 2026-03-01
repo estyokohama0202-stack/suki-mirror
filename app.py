@@ -2,7 +2,7 @@ import requests
 import time
 import os
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
 CHANNEL_ID = os.environ.get("YOUTUBE_CHANNEL_ID")
@@ -12,18 +12,17 @@ TIME_FILE = "last_comment_time.json"
 
 
 # ===============================
-# 最終コメント時間 読み込み
+# 最終時間読み込み
 # ===============================
 def load_last_time():
     if not os.path.exists(TIME_FILE):
         return None
     with open(TIME_FILE, "r") as f:
-        data = json.load(f)
-        return datetime.fromisoformat(data)
+        return datetime.fromisoformat(json.load(f))
 
 
 # ===============================
-# 最終コメント時間 保存
+# 最終時間保存
 # ===============================
 def save_last_time(dt):
     with open(TIME_FILE, "w") as f:
@@ -41,104 +40,37 @@ def get_uploads_playlist():
         "part": "contentDetails"
     }
 
-    response = requests.get(url, params=params)
-    r = response.json()
-
-    if response.status_code != 200:
-        print("CHANNEL API ERROR:", response.status_code, r, flush=True)
-        return None
-
+    r = requests.get(url, params=params).json()
     return r["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
 
 # ===============================
-# 直近100動画取得
+# 直近30動画取得（クォータ節約）
 # ===============================
-def get_latest_100_videos(playlist_id):
+def get_latest_30_videos(playlist_id):
     url = "https://www.googleapis.com/youtube/v3/playlistItems"
 
     params = {
         "key": API_KEY,
         "playlistId": playlist_id,
         "part": "snippet",
-        "maxResults": 50
+        "maxResults": 30
     }
 
+    r = requests.get(url, params=params).json()
+
     videos = []
+    if "items" not in r:
+        print("PLAYLIST ERROR:", r, flush=True)
+        return videos
 
-    while len(videos) < 100:
-        response = requests.get(url, params=params)
-        r = response.json()
+    for item in r["items"]:
+        videos.append({
+            "id": item["snippet"]["resourceId"]["videoId"],
+            "title": item["snippet"]["title"]
+        })
 
-        if response.status_code != 200:
-            print("PLAYLIST API ERROR:", response.status_code, r, flush=True)
-            break
-
-        if "items" not in r:
-            print("No items in playlist response:", r, flush=True)
-            break
-
-        for item in r["items"]:
-            videos.append({
-                "id": item["snippet"]["resourceId"]["videoId"],
-                "title": item["snippet"]["title"]
-            })
-
-        if "nextPageToken" not in r:
-            break
-
-        params["pageToken"] = r["nextPageToken"]
-
-    return videos[:100]
-
-
-# ===============================
-# 初回起動時 初期化
-# ===============================
-def initialize_if_needed(videos):
-    last_time = load_last_time()
-    if last_time:
-        return
-
-    print("First run: Skipping old comments", flush=True)
-
-    newest_time = None
-
-    for video in videos:
-        video_id = video["id"]
-
-        url = "https://www.googleapis.com/youtube/v3/commentThreads"
-        params = {
-            "key": API_KEY,
-            "videoId": video_id,
-            "part": "snippet",
-            "maxResults": 5,
-            "order": "time"
-        }
-
-        response = requests.get(url, params=params)
-        r = response.json()
-
-        if response.status_code != 200:
-            print("INIT COMMENT API ERROR:", response.status_code, r, flush=True)
-            continue
-
-        if "items" not in r:
-            print("INIT no items:", r, flush=True)
-            continue
-
-        for item in r["items"]:
-            snippet = item["snippet"]["topLevelComment"]["snippet"]
-            published = datetime.fromisoformat(
-                snippet["publishedAt"].replace("Z", "+00:00")
-            )
-
-            if not newest_time or published > newest_time:
-                newest_time = published
-
-    if newest_time:
-        save_last_time(newest_time)
-        print("Initialization complete", flush=True)
+    return videos
 
 
 # ===============================
@@ -152,13 +84,11 @@ def check_comments(videos):
     print("Checking comments...", flush=True)
 
     for video in videos:
-        video_id = video["id"]
-        title = video["title"]
 
         url = "https://www.googleapis.com/youtube/v3/commentThreads"
         params = {
             "key": API_KEY,
-            "videoId": video_id,
+            "videoId": video["id"],
             "part": "snippet",
             "maxResults": 5,
             "order": "time"
@@ -168,17 +98,15 @@ def check_comments(videos):
         r = response.json()
 
         if response.status_code != 200:
-            print("COMMENT API ERROR:", response.status_code, r, flush=True)
+            print("COMMENT API ERROR:", r, flush=True)
             continue
 
         if "items" not in r:
-            print("No items in comment response:", r, flush=True)
             continue
 
         for item in reversed(r["items"]):
 
             snippet = item["snippet"]["topLevelComment"]["snippet"]
-
             published = datetime.fromisoformat(
                 snippet["publishedAt"].replace("Z", "+00:00")
             )
@@ -186,20 +114,17 @@ def check_comments(videos):
             if last_time and published <= last_time:
                 continue
 
-            author = snippet["authorDisplayName"]
-            text = snippet["textDisplay"]
-            video_url = f"https://www.youtube.com/watch?v={video_id}"
-
             payload = {
-                "content": f"🎬 **{title}**\n\n🔗 {video_url}\n\n👤 {author}\n💬 {text}"
+                "content": f"🎬 **{video['title']}**\n\n"
+                           f"https://www.youtube.com/watch?v={video['id']}\n\n"
+                           f"👤 {snippet['authorDisplayName']}\n"
+                           f"💬 {snippet['textDisplay']}"
             }
 
             print("Sending to Discord...", flush=True)
+            discord_response = requests.post(DISCORD_WEBHOOK, json=payload)
 
-            response = requests.post(DISCORD_WEBHOOK, json=payload)
-
-            print("Discord status:", response.status_code, flush=True)
-            print("Discord response:", response.text, flush=True)
+            print("Discord status:", discord_response.status_code, flush=True)
 
             if not newest_time or published > newest_time:
                 newest_time = published
@@ -209,21 +134,16 @@ def check_comments(videos):
 
 
 # ===============================
-# メインループ
+# メイン
 # ===============================
 def main():
     print("==== Running main ====", flush=True)
 
     playlist_id = get_uploads_playlist()
-    if not playlist_id:
-        return
+    videos = get_latest_30_videos(playlist_id)
 
-    print("Playlist ID:", playlist_id, flush=True)
-
-    videos = get_latest_100_videos(playlist_id)
     print("Videos fetched:", len(videos), flush=True)
 
-    initialize_if_needed(videos)
     check_comments(videos)
 
 
@@ -235,4 +155,4 @@ while True:
     except Exception as e:
         print("ERROR:", e, flush=True)
 
-    time.sleep(60)
+    time.sleep(600)  # ← 10分
