@@ -1,27 +1,60 @@
-import os
-import time
 import requests
-from bs4 import BeautifulSoup
+import time
 
-WEBHOOK_URL = os.environ["WEBHOOK_URL"]
+API_KEY = "ここにあなたのYouTube APIキー"
+CHANNEL_ID = "UCm5zSNcVsNzMPB8aeIakpHA"
+WEBHOOK_URL = "ここにDiscordWebhookURL"
 
-RESULT_URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
+sent_comments = set()
+
+def get_video_ids():
+    url = "https://www.googleapis.com/youtube/v3/search"
+    params = {
+        "key": API_KEY,
+        "channelId": CHANNEL_ID,
+        "part": "id",
+        "order": "date",
+        "maxResults": 50,
+        "type": "video"
+    }
+    r = requests.get(url, params=params).json()
+    return [item["id"]["videoId"] for item in r.get("items", [])]
+
+def get_comments(video_id):
+    url = "https://www.googleapis.com/youtube/v3/commentThreads"
+    params = {
+        "key": API_KEY,
+        "videoId": video_id,
+        "part": "snippet",
+        "order": "time",
+        "maxResults": 20
+    }
+    r = requests.get(url, params=params).json()
+    return r.get("items", [])
 
 while True:
     try:
-        print("fetching page...", flush=True)
+        videos = get_video_ids()
 
-        res = requests.get(RESULT_URL, headers={
-            "User-Agent": "Mozilla/5.0"
-        })
+        for vid in videos:
+            comments = get_comments(vid)
 
-        print("status:", res.status_code, flush=True)
+            for c in comments:
+                snippet = c["snippet"]["topLevelComment"]["snippet"]
+                text = snippet["textDisplay"]
+                author = snippet["authorDisplayName"]
+                published = snippet["publishedAt"]
 
-        print(res.text[:2000], flush=True)  # ← ここ追加（最初の2000文字）
+                unique_id = vid + published
 
-        break  # 1回で止める
+                if unique_id not in sent_comments:
+                    message = f"🎥 https://youtu.be/{vid}\n**{author}**:\n{text}"
+                    requests.post(WEBHOOK_URL, json={"content": message})
+                    sent_comments.add(unique_id)
+
+        print("checked")
 
     except Exception as e:
-        print("error:", e, flush=True)
+        print("error:", e)
 
-    time.sleep(30)
+    time.sleep(60)
