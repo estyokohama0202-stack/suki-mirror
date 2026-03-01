@@ -1,13 +1,12 @@
 import os
 import time
 import requests
-from datetime import datetime, timezone
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
 CHANNEL_ID = "UCm5zSNcVsNzMPB8aeIakpHA"
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK")
 
-LAST_FILE = "last_time.txt"
+SENT_FILE = "sent_ids.txt"
 
 
 # ===============================
@@ -37,6 +36,9 @@ def get_latest_100_videos(playlist_id):
     while len(videos) < 100:
         r = requests.get(url, params=params).json()
 
+        if "items" not in r:
+            break
+
         for item in r["items"]:
             video_id = item["snippet"]["resourceId"]["videoId"]
             title = item["snippet"]["title"]
@@ -54,26 +56,25 @@ def get_latest_100_videos(playlist_id):
 
 
 # ===============================
-# 時刻保存
+# コメントID管理
 # ===============================
-def get_last_time():
-    if os.path.exists(LAST_FILE):
-        with open(LAST_FILE, "r") as f:
-            return datetime.fromisoformat(f.read().strip())
-    return None
+def load_sent_ids():
+    if os.path.exists(SENT_FILE):
+        with open(SENT_FILE, "r") as f:
+            return set(f.read().splitlines())
+    return set()
 
 
-def save_last_time(dt):
-    with open(LAST_FILE, "w") as f:
-        f.write(dt.isoformat())
+def save_sent_id(comment_id):
+    with open(SENT_FILE, "a") as f:
+        f.write(comment_id + "\n")
 
 
 # ===============================
 # コメントチェック
 # ===============================
 def check_comments(videos):
-    last_time = get_last_time()
-    newest_time = last_time
+    sent_ids = load_sent_ids()
 
     for video in videos:
         video_id = video["id"]
@@ -84,7 +85,7 @@ def check_comments(videos):
             "key": API_KEY,
             "videoId": video_id,
             "part": "snippet",
-            "maxResults": 3,
+            "maxResults": 5,
             "order": "time"
         }
 
@@ -93,14 +94,12 @@ def check_comments(videos):
             continue
 
         for item in reversed(r["items"]):
-            snippet = item["snippet"]["topLevelComment"]["snippet"]
-            published = datetime.fromisoformat(
-                snippet["publishedAt"].replace("Z", "+00:00")
-            )
+            comment_id = item["id"]
 
-            if last_time and published <= last_time:
+            if comment_id in sent_ids:
                 continue
 
+            snippet = item["snippet"]["topLevelComment"]["snippet"]
             author = snippet["authorDisplayName"]
             text = snippet["textDisplay"]
             video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -111,25 +110,51 @@ def check_comments(videos):
 
             requests.post(DISCORD_WEBHOOK, json=payload)
 
-            if not newest_time or published > newest_time:
-                newest_time = published
-
-    if newest_time:
-        save_last_time(newest_time)
+            save_sent_id(comment_id)
+            sent_ids.add(comment_id)
 
 
 # ===============================
-# メイン
+# 初回起動時の初期化
+# ===============================
+def initialize_if_needed(videos):
+    if os.path.exists(SENT_FILE):
+        return
+
+    sent_ids = set()
+
+    for video in videos:
+        url = "https://www.googleapis.com/youtube/v3/commentThreads"
+        params = {
+            "key": API_KEY,
+            "videoId": video["id"],
+            "part": "snippet",
+            "maxResults": 5,
+            "order": "time"
+        }
+
+        r = requests.get(url, params=params).json()
+        if "items" not in r:
+            continue
+
+        for item in r["items"]:
+            sent_ids.add(item["id"])
+
+    with open(SENT_FILE, "w") as f:
+        for cid in sent_ids:
+            f.write(cid + "\n")
+
+    print("Initialized comment IDs")
+
+
+# ===============================
+# メインループ
 # ===============================
 def main():
     playlist_id = get_uploads_playlist()
     videos = get_latest_100_videos(playlist_id)
 
-    if not os.path.exists(LAST_FILE):
-        save_last_time(datetime.now(timezone.utc))
-        print("Initialized timestamp")
-        return
-
+    initialize_if_needed(videos)
     check_comments(videos)
 
 
