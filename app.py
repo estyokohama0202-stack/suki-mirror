@@ -10,6 +10,9 @@ DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK")
 LAST_FILE = "last_time.txt"
 
 
+# ===============================
+# アップロード動画（直近100本）
+# ===============================
 def get_uploads_playlist():
     url = "https://www.googleapis.com/youtube/v3/channels"
     params = {
@@ -21,8 +24,8 @@ def get_uploads_playlist():
     return r["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
 
-def get_latest_100_video_ids(playlist_id):
-    video_ids = []
+def get_latest_100_videos(playlist_id):
+    videos = []
     url = "https://www.googleapis.com/youtube/v3/playlistItems"
     params = {
         "key": API_KEY,
@@ -31,22 +34,28 @@ def get_latest_100_video_ids(playlist_id):
         "maxResults": 50
     }
 
-    while len(video_ids) < 100:
+    while len(videos) < 100:
         r = requests.get(url, params=params).json()
 
         for item in r["items"]:
-            video_ids.append(item["snippet"]["resourceId"]["videoId"])
-            if len(video_ids) >= 100:
+            video_id = item["snippet"]["resourceId"]["videoId"]
+            title = item["snippet"]["title"]
+            videos.append({"id": video_id, "title": title})
+
+            if len(videos) >= 100:
                 break
 
-        if "nextPageToken" in r and len(video_ids) < 100:
+        if "nextPageToken" in r and len(videos) < 100:
             params["pageToken"] = r["nextPageToken"]
         else:
             break
 
-    return video_ids
+    return videos
 
 
+# ===============================
+# 時刻保存
+# ===============================
 def get_last_time():
     if os.path.exists(LAST_FILE):
         with open(LAST_FILE, "r") as f:
@@ -59,11 +68,17 @@ def save_last_time(dt):
         f.write(dt.isoformat())
 
 
-def check_comments(video_ids):
+# ===============================
+# コメントチェック
+# ===============================
+def check_comments(videos):
     last_time = get_last_time()
     newest_time = last_time
 
-    for video_id in video_ids:
+    for video in videos:
+        video_id = video["id"]
+        title = video["title"]
+
         url = "https://www.googleapis.com/youtube/v3/commentThreads"
         params = {
             "key": API_KEY,
@@ -91,7 +106,7 @@ def check_comments(video_ids):
             video_url = f"https://www.youtube.com/watch?v={video_id}"
 
             payload = {
-                "content": f"🔗 {video_url}\n💬 {author}: {text}"
+                "content": f"🎬 **{title}**\n\n🔗 {video_url}\n\n👤 {author}\n💬 {text}"
             }
 
             requests.post(DISCORD_WEBHOOK, json=payload)
@@ -103,16 +118,19 @@ def check_comments(video_ids):
         save_last_time(newest_time)
 
 
+# ===============================
+# メイン
+# ===============================
 def main():
     playlist_id = get_uploads_playlist()
-    video_ids = get_latest_100_video_ids(playlist_id)
+    videos = get_latest_100_videos(playlist_id)
 
     if not os.path.exists(LAST_FILE):
         save_last_time(datetime.now(timezone.utc))
         print("Initialized timestamp")
         return
 
-    check_comments(video_ids)
+    check_comments(videos)
 
 
 while True:
