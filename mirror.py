@@ -7,8 +7,6 @@ WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 
 RESULT_URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
 
-sent = set()
-
 while True:
     try:
         print("fetching page...", flush=True)
@@ -17,20 +15,11 @@ while True:
             "User-Agent": "Mozilla/5.0"
         })
 
-        soup = BeautifulSoup(res.text, "html.parser")
+        print("status:", res.status_code, flush=True)
 
-        comments = soup.select(".comment-container")
+        print(res.text[:2000], flush=True)  # ← ここ追加（最初の2000文字）
 
-        print("comment count:", len(comments), flush=True)
-
-        for c in comments:
-            text = c.get_text(strip=True)
-
-            if text and text not in sent:
-                requests.post(WEBHOOK_URL, json={"content": text})
-                sent.add(text)
-
-        print("checked...", flush=True)
+        break  # 1回で止める
 
     except Exception as e:
         print("error:", e, flush=True)
