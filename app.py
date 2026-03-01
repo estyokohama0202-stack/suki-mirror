@@ -92,13 +92,28 @@ def check_comments(videos):
 
             seen_comments.add(comment_id)
 
-
+# ===============================
+# メインループ
+# ===============================
 def main():
+    print("==== Running main ====", flush=True)
+
     playlist_id = get_uploads_playlist()
+    print("Playlist ID:", playlist_id, flush=True)
+
     videos = get_latest_100_videos(playlist_id)
+    print("Videos fetched:", len(videos), flush=True)
+
+    initialize_if_needed(videos)
     check_comments(videos)
 
 
+print("==== Bot Starting ====", flush=True)
+
 while True:
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("ERROR:", e, flush=True)
+
     time.sleep(60)
