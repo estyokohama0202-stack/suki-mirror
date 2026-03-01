@@ -1,64 +1,30 @@
 import os
 import time
 import requests
-
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
 
 WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 
-VOTE_URL = "https://suki-kira.com/people/vote/DJ%20SHIGE"
 RESULT_URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
 
 sent = set()
 
-options = Options()
-options.add_argument("--headless=new")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-gpu")
-options.add_argument("--window-size=1920,1080")
-
-# 🔥 ここ重要：パス指定しない
-driver = webdriver.Chrome(options=options)
-
 while True:
     try:
-        print("opening vote page...", flush=True)
-        driver.get(VOTE_URL)
+        print("fetching page...", flush=True)
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "button"))
-        )
+        res = requests.get(RESULT_URL, headers={
+            "User-Agent": "Mozilla/5.0"
+        })
 
-        print("searching vote button...", flush=True)
+        soup = BeautifulSoup(res.text, "html.parser")
 
-        buttons = driver.find_elements(By.TAG_NAME, "button")
-
-        for b in buttons:
-            if "好き" in b.text:
-                print("clicking like button", flush=True)
-                b.click()
-                break
-
-        time.sleep(3)
-
-        print("opening result page...", flush=True)
-        driver.get(RESULT_URL)
-
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "comment-container"))
-        )
-
-        comments = driver.find_elements(By.CLASS_NAME, "comment-container")
+        comments = soup.select(".comment-container")
 
         print("comment count:", len(comments), flush=True)
 
         for c in comments:
-            text = c.text.strip()
+            text = c.get_text(strip=True)
 
             if text and text not in sent:
                 requests.post(WEBHOOK_URL, json={"content": text})
