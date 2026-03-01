@@ -74,6 +74,10 @@ def save_sent_id(comment_id):
 # コメントチェック
 # ===============================
 def check_comments(videos):
+
+    print("Checking videos:", len(videos))
+    print("Newest video:", videos[0]["title"])
+    
     sent_ids = load_sent_ids()
 
     for video in videos:
