@@ -2,28 +2,32 @@ import requests
 import time
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
 CHANNEL_ID = os.environ.get("YOUTUBE_CHANNEL_ID")
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK")
 
-SENT_FILE = "sent_comments.json"
+TIME_FILE = "last_comment_time.json"
 
 
 # ===============================
-# 送信済みコメントID保存
+# 最終コメント時間 読み込み
 # ===============================
-def load_sent_ids():
-    if not os.path.exists(SENT_FILE):
-        return set()
-    with open(SENT_FILE, "r") as f:
-        return set(json.load(f))
+def load_last_time():
+    if not os.path.exists(TIME_FILE):
+        return None
+    with open(TIME_FILE, "r") as f:
+        data = json.load(f)
+        return datetime.fromisoformat(data)
 
 
-def save_sent_ids(ids):
-    with open(SENT_FILE, "w") as f:
-        json.dump(list(ids), f)
+# ===============================
+# 最終コメント時間 保存
+# ===============================
+def save_last_time(dt):
+    with open(TIME_FILE, "w") as f:
+        json.dump(dt.isoformat(), f)
 
 
 # ===============================
@@ -55,6 +59,7 @@ def get_latest_100_videos(playlist_id):
     }
 
     videos = []
+
     while len(videos) < 100:
         r = requests.get(url, params=params).json()
 
@@ -73,14 +78,16 @@ def get_latest_100_videos(playlist_id):
 
 
 # ===============================
-# 初回起動時の初期化
+# 初回起動時 初期化
 # ===============================
 def initialize_if_needed(videos):
-    sent_ids = load_sent_ids()
-    if sent_ids:
+    last_time = load_last_time()
+    if last_time:
         return
 
-    print("Initializing comment IDs...", flush=True)
+    print("First run: Skipping old comments", flush=True)
+
+    newest_time = None
 
     for video in videos:
         video_id = video["id"]
@@ -90,7 +97,7 @@ def initialize_if_needed(videos):
             "key": API_KEY,
             "videoId": video_id,
             "part": "snippet",
-            "maxResults": 3,
+            "maxResults": 5,
             "order": "time"
         }
 
@@ -100,20 +107,28 @@ def initialize_if_needed(videos):
             continue
 
         for item in r["items"]:
-            sent_ids.add(item["id"])
+            snippet = item["snippet"]["topLevelComment"]["snippet"]
+            published = datetime.fromisoformat(
+                snippet["publishedAt"].replace("Z", "+00:00")
+            )
 
-    save_sent_ids(sent_ids)
-    print("Initialization complete", flush=True)
+            if not newest_time or published > newest_time:
+                newest_time = published
+
+    if newest_time:
+        save_last_time(newest_time)
+        print("Initialization complete", flush=True)
 
 
 # ===============================
-# コメントチェック
+# コメントチェック（時間管理）
 # ===============================
 def check_comments(videos):
 
-    print("Checking videos:", len(videos), flush=True)
+    last_time = load_last_time()
+    newest_time = last_time
 
-    sent_ids = load_sent_ids()
+    print("Checking comments...", flush=True)
 
     for video in videos:
         video_id = video["id"]
@@ -135,16 +150,17 @@ def check_comments(videos):
 
         for item in reversed(r["items"]):
 
-            comment_id = item["id"]
-
-            if comment_id in sent_ids:
-                continue
-
             snippet = item["snippet"]["topLevelComment"]["snippet"]
+
+            published = datetime.fromisoformat(
+                snippet["publishedAt"].replace("Z", "+00:00")
+            )
+
+            if last_time and published <= last_time:
+                continue
 
             author = snippet["authorDisplayName"]
             text = snippet["textDisplay"]
-
             video_url = f"https://www.youtube.com/watch?v={video_id}"
 
             payload = {
@@ -153,11 +169,13 @@ def check_comments(videos):
 
             requests.post(DISCORD_WEBHOOK, json=payload)
 
-            print("Sent new comment:", comment_id, flush=True)
+            print("Sent new comment:", published, flush=True)
 
-            sent_ids.add(comment_id)
+            if not newest_time or published > newest_time:
+                newest_time = published
 
-    save_sent_ids(sent_ids)
+    if newest_time:
+        save_last_time(newest_time)
 
 
 # ===============================
