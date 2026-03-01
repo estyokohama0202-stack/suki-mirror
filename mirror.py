@@ -1,44 +1,38 @@
-import requests
-from bs4 import BeautifulSoup
-import time
 import os
+import time
+import requests
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 
 WEBHOOK_URL = os.environ["WEBHOOK_URL"]
-
-VOTE_URL = "https://suki-kira.com/people/vote/DJ%20SHIGE"
-RESULT_URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
+URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
 
 sent = set()
 
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
+options = Options()
+options.add_argument("--headless=new")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+options.add_argument("--window-size=1920,1080")
+
+driver = webdriver.Chrome(options=options)
 
 while True:
     try:
-        session = requests.Session()
-        session.headers.update(headers)
+        print("opening page...", flush=True)
+        driver.get(URL)
 
-        print("requesting vote page...", flush=True)
-        session.get(VOTE_URL, timeout=10)
+        time.sleep(5)  # JS読み込み待ち
 
-        print("sending vote...", flush=True)
-        session.post(VOTE_URL, data={"vote": "like"}, timeout=10)
-
-        print("getting result page...", flush=True)
-        r = session.get(RESULT_URL, timeout=10)
-
-        print("final url:", r.url, flush=True)
-
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # ★ ここを修正
-        comments = soup.select(".comment-container")
+        comments = driver.find_elements(By.CLASS_NAME, "comment-container")
 
         print("comment count:", len(comments), flush=True)
 
         for c in comments:
-            text = c.get_text(strip=True)
+            text = c.text.strip()
 
             if text and text not in sent:
                 requests.post(WEBHOOK_URL, json={"content": text})
