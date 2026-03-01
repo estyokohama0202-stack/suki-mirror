@@ -41,7 +41,13 @@ def get_uploads_playlist():
         "part": "contentDetails"
     }
 
-    r = requests.get(url, params=params).json()
+    response = requests.get(url, params=params)
+    r = response.json()
+
+    if response.status_code != 200:
+        print("CHANNEL API ERROR:", response.status_code, r, flush=True)
+        return None
+
     return r["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
 
@@ -61,7 +67,16 @@ def get_latest_100_videos(playlist_id):
     videos = []
 
     while len(videos) < 100:
-        r = requests.get(url, params=params).json()
+        response = requests.get(url, params=params)
+        r = response.json()
+
+        if response.status_code != 200:
+            print("PLAYLIST API ERROR:", response.status_code, r, flush=True)
+            break
+
+        if "items" not in r:
+            print("No items in playlist response:", r, flush=True)
+            break
 
         for item in r["items"]:
             videos.append({
@@ -101,9 +116,15 @@ def initialize_if_needed(videos):
             "order": "time"
         }
 
-        r = requests.get(url, params=params).json()
+        response = requests.get(url, params=params)
+        r = response.json()
+
+        if response.status_code != 200:
+            print("INIT COMMENT API ERROR:", response.status_code, r, flush=True)
+            continue
 
         if "items" not in r:
+            print("INIT no items:", r, flush=True)
             continue
 
         for item in r["items"]:
@@ -121,7 +142,7 @@ def initialize_if_needed(videos):
 
 
 # ===============================
-# コメントチェック（時間管理）
+# コメントチェック
 # ===============================
 def check_comments(videos):
 
@@ -143,9 +164,15 @@ def check_comments(videos):
             "order": "time"
         }
 
-        r = requests.get(url, params=params).json()
+        response = requests.get(url, params=params)
+        r = response.json()
+
+        if response.status_code != 200:
+            print("COMMENT API ERROR:", response.status_code, r, flush=True)
+            continue
 
         if "items" not in r:
+            print("No items in comment response:", r, flush=True)
             continue
 
         for item in reversed(r["items"]):
@@ -188,6 +215,9 @@ def main():
     print("==== Running main ====", flush=True)
 
     playlist_id = get_uploads_playlist()
+    if not playlist_id:
+        return
+
     print("Playlist ID:", playlist_id, flush=True)
 
     videos = get_latest_100_videos(playlist_id)
