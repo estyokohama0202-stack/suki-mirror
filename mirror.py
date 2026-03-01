@@ -7,7 +7,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 WEBHOOK_URL = os.environ["WEBHOOK_URL"]
-URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
+
+VOTE_URL = "https://suki-kira.com/people/vote/DJ%20SHIGE"
+RESULT_URL = "https://suki-kira.com/people/result/DJ%20SHIGE"
 
 sent = set()
 
@@ -22,10 +24,21 @@ driver = webdriver.Chrome(options=options)
 
 while True:
     try:
-        print("opening page...", flush=True)
-        driver.get(URL)
+        print("opening vote page...", flush=True)
+        driver.get(VOTE_URL)
 
-        time.sleep(5)  # JS読み込み待ち
+        time.sleep(3)
+
+        print("clicking vote button...", flush=True)
+        vote_button = driver.find_element(By.CLASS_NAME, "vote-like")
+        vote_button.click()
+
+        time.sleep(5)
+
+        print("getting result page...", flush=True)
+        driver.get(RESULT_URL)
+
+        time.sleep(5)
 
         comments = driver.find_elements(By.CLASS_NAME, "comment-container")
 
