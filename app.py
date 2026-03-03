@@ -123,21 +123,23 @@ def check_comments(videos):
             # ===============================
             # Discord（カード形式・見やすい版）
             # ===============================
-            payload = {
-                "embeds": [
-                    {
-                        "description": f"💬 {snippet['textDisplay']}\n\n🔗 https://www.youtube.com/watch?v={video['id']}",
-                        "color": 16711680,
-                        "author": {
-                            "name": snippet["authorDisplayName"]
-                        },
-                        "footer": {
-                            "text": "YouTube コメント通知"
-                        }
-                    }
-                ]
+       payload = {
+    "embeds": [
+        {
+            "description": f"💬 {snippet['textDisplay']}\n\n🔗 https://www.youtube.com/watch?v={video['id']}",
+            "color": 16711680,
+            "author": {
+                "name": snippet["authorDisplayName"]
+            },
+            "image": {
+                "url": f"https://img.youtube.com/vi/{video['id']}/hqdefault.jpg"
+            },
+            "footer": {
+                "text": "YouTube コメント通知"
             }
-
+        }
+    ]
+}
             print("Sending to Discord...", flush=True)
 
             try:
