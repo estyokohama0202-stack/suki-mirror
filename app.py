@@ -115,16 +115,26 @@ def check_comments(videos):
                 continue
 
             payload = {
-                "content": f"🎬 **{video['title']}**\n\n"
-                           f"https://www.youtube.com/watch?v={video['id']}\n\n"
-                           f"👤 {snippet['authorDisplayName']}\n"
-                           f"💬 {snippet['textDisplay']}"
+    "embeds": [
+        {
+            "title": video["title"],
+            "url": f"https://www.youtube.com/watch?v={video['id']}",
+            "description": f"💬 {snippet['textDisplay']}",
+            "color": 16711680,
+            "author": {
+                "name": snippet["authorDisplayName"]
+            },
+            "footer": {
+                "text": "YouTube コメント通知"
             }
+        }
+    ]
+}
 
-            print("Sending to Discord...", flush=True)
-            discord_response = requests.post(DISCORD_WEBHOOK, json=payload)
+print("Sending to Discord...", flush=True)
+discord_response = requests.post(DISCORD_WEBHOOK, json=payload)
 
-            print("Discord status:", discord_response.status_code, flush=True)
+print("Discord status:", discord_response.status_code, flush=True)
 
             if not newest_time or published > newest_time:
                 newest_time = published
