@@ -116,37 +116,38 @@ def check_comments(videos):
                 snippet["publishedAt"].replace("Z", "+00:00")
             )
 
-            # 既存コメントはスキップ
+            # 古いコメントは無視
             if last_time and published <= last_time:
                 continue
 
             # ===============================
-            # Discord（カード形式・見やすい版）
+            # Discord（カード形式）
             # ===============================
-       payload = {
-    "embeds": [
-        {
-            "description": f"💬 {snippet['textDisplay']}\n\n🔗 https://www.youtube.com/watch?v={video['id']}",
-            "color": 16711680,
-            "author": {
-                "name": snippet["authorDisplayName"]
-            },
-            "image": {
-                "url": f"https://img.youtube.com/vi/{video['id']}/hqdefault.jpg"
-            },
-            "footer": {
-                "text": "YouTube コメント通知"
+            payload = {
+                "embeds": [
+                    {
+                        "description": f"💬 {snippet['textDisplay']}\n\n🔗 https://www.youtube.com/watch?v={video['id']}",
+                        "color": 16711680,
+                        "author": {
+                            "name": snippet["authorDisplayName"]
+                        },
+                        "image": {
+                            "url": f"https://img.youtube.com/vi/{video['id']}/hqdefault.jpg"
+                        },
+                        "footer": {
+                            "text": "YouTube コメント通知"
+                        }
+                    }
+                ]
             }
-        }
-    ]
-}
+
             print("Sending to Discord...", flush=True)
 
             try:
                 discord_response = requests.post(DISCORD_WEBHOOK, json=payload)
                 print("Discord status:", discord_response.status_code, flush=True)
 
-                # 429対策
+                # レート制限対策
                 if discord_response.status_code == 429:
                     print("Rate limited! Sleeping...", flush=True)
                     time.sleep(5)
@@ -154,7 +155,7 @@ def check_comments(videos):
             except Exception as e:
                 print("DISCORD ERROR:", e, flush=True)
 
-            # 送信間隔（重要）
+            # 連投防止
             time.sleep(1)
 
             # 最新時間更新
