@@ -94,8 +94,12 @@ def check_comments(videos):
             "order": "time"
         }
 
-        response = requests.get(url, params=params)
-        r = response.json()
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            r = response.json()
+        except Exception as e:
+            print("REQUEST ERROR:", e, flush=True)
+            continue
 
         if response.status_code != 200:
             print("COMMENT API ERROR:", r, flush=True)
@@ -107,42 +111,59 @@ def check_comments(videos):
         for item in reversed(r["items"]):
 
             snippet = item["snippet"]["topLevelComment"]["snippet"]
+
             published = datetime.fromisoformat(
                 snippet["publishedAt"].replace("Z", "+00:00")
             )
 
+            # 既存コメントはスキップ
             if last_time and published <= last_time:
                 continue
 
+            # ===============================
+            # Discord（カード形式・見やすい版）
+            # ===============================
             payload = {
-    "embeds": [
-        {
-            "title": video["title"],
-            "url": f"https://www.youtube.com/watch?v={video['id']}",
-            "description": f"💬 {snippet['textDisplay']}",
-            "color": 16711680,
-            "author": {
-                "name": snippet["authorDisplayName"]
-            },
-            "footer": {
-                "text": "YouTube コメント通知"
+                "embeds": [
+                    {
+                        "description": f"💬 {snippet['textDisplay']}\n\n🔗 https://www.youtube.com/watch?v={video['id']}",
+                        "color": 16711680,
+                        "author": {
+                            "name": snippet["authorDisplayName"]
+                        },
+                        "footer": {
+                            "text": "YouTube コメント通知"
+                        }
+                    }
+                ]
             }
-        }
-    ]
-}
 
-print("Sending to Discord...", flush=True)
-discord_response = requests.post(DISCORD_WEBHOOK, json=payload)
+            print("Sending to Discord...", flush=True)
 
-print("Discord status:", discord_response.status_code, flush=True)
+            try:
+                discord_response = requests.post(DISCORD_WEBHOOK, json=payload)
+                print("Discord status:", discord_response.status_code, flush=True)
 
+                # 429対策
+                if discord_response.status_code == 429:
+                    print("Rate limited! Sleeping...", flush=True)
+                    time.sleep(5)
+
+            except Exception as e:
+                print("DISCORD ERROR:", e, flush=True)
+
+            # 送信間隔（重要）
+            time.sleep(1)
+
+            # 最新時間更新
             if not newest_time or published > newest_time:
                 newest_time = published
 
+    # ===============================
+    # 時間保存
+    # ===============================
     if newest_time:
         save_last_time(newest_time)
-
-
 # ===============================
 # メイン
 # ===============================
